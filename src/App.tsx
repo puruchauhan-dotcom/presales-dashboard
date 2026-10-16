@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bot, HeartPulse, ListTodo, BarChart3, Briefcase, CalendarDays, Database, Lock, LogOut, Moon, MonitorPlay, RefreshCw, ShieldCheck, Sun, Target, Timer, Users, X } from "lucide-react";
 import { Kpi } from "./components/ui";
-import { Deals, Demos, Meetings, Overview, Quality } from "./components/views";
+import { DealDrawer, Deals, Demos, Meetings, Overview, Quality } from "./components/views";
+import { DrillChip, DrillCtx, DrillDrawer, matchDrill, type Drill, type DrillDim } from "./components/drill";
 import { ChatWidget, CreatorInbox } from "./components/chat";
 import { Actions, Health, demoDelivery, isPuruPaid } from "./components/insights";
-import { applyFilters, defaultFilters, stageSort, today, uniq, type Dataset, type Filters } from "./lib";
+import { applyFilters, defaultFilters, stageSort, today, uniq, type Dataset, type Deal, type Filters } from "./lib";
 
 const NAV = [
   { id: "overview", label: "Overview", icon: BarChart3 }, { id: "health", label: "POC health & outcomes", icon: HeartPulse }, { id: "actions", label: "This week & actions", icon: ListTodo },
@@ -39,6 +40,9 @@ export default function App() {
   const [err, setErr] = useState("");
   const [view, setView] = useState<View>(() => (NAV.find(n => "#" + n.id === location.hash)?.id ?? "overview"));
   const [filters, setFilters] = useState<Filters>(defaultFilters);
+  const [drillOpen, setDrillOpen] = useState<Drill | null>(null); // drawer
+  const [drillFilter, setDrillFilter] = useState<Drill | null>(null); // applied to pipeline views
+  const [openDeal, setOpenDeal] = useState<Deal | null>(null);
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
 
   useEffect(() => { document.documentElement.classList.toggle("dark", dark); localStorage.theme = dark ? "dark" : "light"; }, [dark]);
@@ -51,12 +55,16 @@ export default function App() {
   }, []);
   useEffect(() => { if (session?.authed) { load(); const t = setInterval(() => load(), 5 * 60e3); return () => clearInterval(t); } }, [session?.authed, load]);
 
-  const f = useMemo(() => data ? applyFilters(data, filters) : { deals: [], demos: [], meetings: [] }, [data, filters]);
+  const base = useMemo(() => data ? applyFilters(data, filters) : { deals: [], demos: [], meetings: [] }, [data, filters]);
+  const f = useMemo(() => matchDrill(base, drillFilter), [base, drillFilter]);
+  const drillRows = useMemo(() => matchDrill(base, drillOpen), [base, drillOpen]);
+  const ctx = useMemo(() => ({ drill: (dim: DrillDim, value: string) => setDrillOpen({ dim, value, label: value }), openDeal: (d: Deal) => setOpenDeal(d) }), []);
   if (!session) return null;
   if (!session.authed) return <Login onDone={() => setSession({ required: true, authed: true })} />;
 
   const set = (k: keyof Filters, v: string) => setFilters(s => ({ ...s, [k]: v }));
   const active = (Object.keys(filters) as (keyof Filters)[]).filter(k => filters[k] !== defaultFilters[k]);
+  const nActive = active.length + (drillFilter ? 1 : 0);
   const dl = demoDelivery(f.demos);
   const held = f.meetings.filter(m => m.date && m.date <= today() && /^done/i.test(m.status)).length;
   const withNotes = f.meetings.filter(m => /notes found/i.test(m.status)).length;
@@ -64,6 +72,7 @@ export default function App() {
   const puruPaid = f.deals.filter(isPuruPaid).length; const paidAll = f.deals.filter(d => /^paid$/i.test(d.pocType)).length;
 
   return (
+    <DrillCtx.Provider value={ctx}>
     <div className="flex min-h-screen">
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-slate-200 bg-white/70 p-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/70 md:flex">
         <div className="mb-8 flex items-center gap-2.5 px-2"><div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white"><Target size={18} /></div><div><div className="text-sm font-semibold leading-tight">Presales HQ</div><div className="text-[11px] muted">Paytm Pi · Puru Chauhan</div></div></div>
@@ -94,7 +103,8 @@ export default function App() {
             <select className="select" value={filters.demoStatus} onChange={e => set("demoStatus", e.target.value)}><option value="">All demo statuses</option>{uniq(data?.demos.map(d => d.status) ?? []).map(s => <option key={s}>{s}</option>)}</select>
             <select className="select" value={filters.demoType} onChange={e => set("demoType", e.target.value)}><option value="">All demo types</option>{uniq(data?.demos.map(d => d.type) ?? []).map(s => <option key={s}>{s}</option>)}</select>
             <input className="select w-48" placeholder="Global search…" value={filters.q} onChange={e => set("q", e.target.value)} />
-            {active.length > 0 && <button onClick={() => setFilters(defaultFilters)} className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-rose-500 hover:bg-rose-500/10"><X size={14} />Clear ({active.length})</button>}
+            {drillFilter && <DrillChip d={drillFilter} onClear={() => setDrillFilter(null)} />}
+            {nActive > 0 && <button onClick={() => { setFilters(defaultFilters); setDrillFilter(null); }} className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-rose-500 hover:bg-rose-500/10"><X size={14} />Clear ({nActive})</button>}
           </div>
         </header>
 
@@ -108,7 +118,7 @@ export default function App() {
               <Kpi label="Meetings held" value={held} hint={`${withNotes} with Gemini notes · ${held ? Math.round((withNotes / held) * 100) : 0}%`} icon={<Users size={16} />} accent="from-emerald-500 to-teal-500" />
               <Kpi label="Puru-owned paid POCs" value={puruPaid} hint={`of ${paidAll} paid POCs · ${effort}h presales effort`} icon={<Timer size={16} />} accent="from-amber-500 to-orange-500" />
             </div>}
-            {view === "overview" && <Overview f={f} data={data} pick={(k, v) => set(k, v)} />}
+            {view === "overview" && <Overview f={f} data={data} />}
             {view === "health" && <Health deals={f.deals} />}
             {view === "actions" && <Actions data={data} deals={f.deals} />}
             {view === "deals" && <Deals deals={f.deals} />}
@@ -120,6 +130,10 @@ export default function App() {
         </div>
       </main>
       <ChatWidget filters={filters} hasFilters={active.length > 0} />
+      <DrillDrawer d={drillOpen} rows={drillRows} onClose={() => setDrillOpen(null)} onOpenDeal={d => setOpenDeal(d)}
+        onPipeline={() => { setDrillFilter(drillOpen); setDrillOpen(null); setView("deals"); }} onDemos={() => { setDrillFilter(drillOpen); setDrillOpen(null); setView("demos"); }} />
+      <DealDrawer open={openDeal} setOpen={setOpenDeal} />
     </div>
+    </DrillCtx.Provider>
   );
 }

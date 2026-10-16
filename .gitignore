@@ -8,3 +8,4 @@ dist-server
 service-account*.json
 screenshots/*.tmp
 data/snapshot.json
+runtime

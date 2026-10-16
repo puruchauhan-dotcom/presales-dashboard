@@ -1,0 +1,1 @@
+export const healthTone = (h: string) => ({ Active: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400", Cooling: "bg-amber-500/15 text-amber-600 dark:text-amber-400", Cold: "bg-rose-500/15 text-rose-600 dark:text-rose-400", Closed: "bg-slate-500/20 text-slate-500" } as Record<string, string>)[h] ?? "bg-slate-500/15 text-slate-500";

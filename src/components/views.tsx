@@ -3,13 +3,15 @@ import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Clock, Columns3
 import { Badge, Card, Drawer, Empty, Field } from "./ui";
 import { Donut, HBar, Trend } from "./charts";
 import { DemoAgeing, healthTone } from "./insights";
+import { useDrill } from "./drill";
 import { verticalGroup } from "../../shared/model";
 import { countBy, daysSince, fmtDate, stageSort, today, uniq, weekly, type Dataset, type Deal, type Demo, type Meeting } from "../lib";
 
 type F = { deals: Deal[]; demos: Demo[]; meetings: Meeting[] };
 
 /* ---------------- Overview ---------------- */
-export function Overview({ f, data, pick }: { f: F; data: Dataset; pick: (k: "stage" | "rep" | "demoStatus" | "demoType", v: string) => void }) {
+export function Overview({ f, data }: { f: F; data: Dataset }) {
+  const { drill } = useDrill();
   const trend = useMemo(() => weekly(f.deals, f.demos, f.meetings), [f]);
   const upcoming = data.meetings.filter(m => m.date && m.date >= today()).sort((a, b) => (a.date! + a.time).localeCompare(b.date! + b.time)).slice(0, 6);
   const stale = f.deals.filter(d => (daysSince(d.dateAssigned) ?? 0) > 21 && d.stage === "Discovery").length;
@@ -26,11 +28,11 @@ export function Overview({ f, data, pick }: { f: F; data: Dataset; pick: (k: "st
         <h4 className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide muted">Upcoming meetings</h4>
         {upcoming.length ? <ul className="space-y-2">{upcoming.map((m, i) => <li key={i} className="rounded-lg bg-slate-50 p-2 text-xs dark:bg-slate-800/60"><div className="font-medium">{m.client || m.title}</div><div className="muted">{fmtDate(m.date)} · {m.time} IST</div></li>)}</ul> : <p className="text-xs muted">None scheduled in tracker.</p>}
       </Card>
-      <Card title="Deals by stage" subtitle="Click to filter"><Donut height={170} data={countBy(f.deals, d => d.stage).sort((a, b) => stageSort(a.name, b.name))} onPick={v => pick("stage", v)} /></Card>
-      <Card title="Demo status" subtitle="Click to filter"><Donut height={170} data={countBy(f.demos, d => d.status)} onPick={v => pick("demoStatus", v)} /></Card>
-      <Card title="Demos by type" subtitle="Click to filter"><Donut height={170} data={countBy(f.demos, d => d.type)} onPick={v => pick("demoType", v)} /></Card>
-      <Card title="Top sales reps" subtitle="Deals per rep · click to filter" className="lg:col-span-2"><HBar data={countBy(f.deals, d => d.rep || "Unassigned").slice(0, 10)} onPick={v => v !== "Unassigned" && pick("rep", v)} /></Card>
-      <Card title="Verticals" subtitle="Grouped verticals"><HBar data={countBy(f.deals, d => verticalGroup(d.vertical)).slice(0, 8)} color="#8b5cf6" /></Card>
+      <Card title="Deals by stage" subtitle="Click to see the accounts"><Donut height={170} data={countBy(f.deals, d => d.stage).sort((a, b) => stageSort(a.name, b.name))} onPick={v => drill("stage", v)} /></Card>
+      <Card title="Demo status" subtitle="Click to see the demos"><Donut height={170} data={countBy(f.demos, d => d.status)} onPick={v => drill("demoStatus", v)} /></Card>
+      <Card title="Demos by type" subtitle="Click to see the demos"><Donut height={170} data={countBy(f.demos, d => d.type)} onPick={v => drill("demoType", v)} /></Card>
+      <Card title="Top sales reps" subtitle="Deals per rep · click to see the accounts" className="lg:col-span-2"><HBar data={countBy(f.deals, d => d.rep || "Unassigned").slice(0, 10)} onPick={v => drill("rep", v)} /></Card>
+      <Card title="Verticals" subtitle="Grouped · click to see the accounts"><HBar data={countBy(f.deals, d => verticalGroup(d.vertical)).slice(0, 8)} color="#8b5cf6" onPick={v => drill("vertical", v)} /></Card>
     </div>
   );
 }
@@ -38,7 +40,7 @@ export function Overview({ f, data, pick }: { f: F; data: Dataset; pick: (k: "st
 /* ---------------- Deals ---------------- */
 export function Deals({ deals }: { deals: Deal[] }) {
   const [mode, setMode] = useState<"kanban" | "table">("kanban");
-  const [open, setOpen] = useState<Deal | null>(null);
+  const { openDeal } = useDrill(); const setOpen = (d: Deal | null) => d && openDeal(d);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<{ k: keyof Deal; dir: 1 | -1 }>({ k: "dateAssigned", dir: -1 });
   const rows = useMemo(() => {
@@ -87,7 +89,14 @@ export function Deals({ deals }: { deals: Deal[] }) {
           </table>{!rows.length && <Empty />}
         </div>
       )}
-      <Drawer open={!!open} onClose={() => setOpen(null)} title={open && <><div className="text-xs muted">{open.id} · {open.vertical}</div><h2 className="text-xl font-semibold">{open.account}</h2><p className="text-sm muted">{open.opportunity}</p><div className="mt-2 flex gap-2"><Badge>{open.stage}</Badge><Badge tone="bg-indigo-500/15 text-indigo-600 dark:text-indigo-300">{open.rep || "No rep"}</Badge></div></>}>
+    </div>
+  );
+}
+
+/** Deal detail drawer, shared by the pipeline, chart drill-downs and tables. */
+export function DealDrawer({ open, setOpen }: { open: Deal | null; setOpen: (d: Deal | null) => void }) {
+  return (
+    <Drawer open={!!open} onClose={() => setOpen(null)} title={open && <><div className="text-xs muted">{open.id} · {open.vertical}</div><h2 className="text-xl font-semibold">{open.account}</h2><p className="text-sm muted">{open.opportunity}</p><div className="mt-2 flex gap-2"><Badge>{open.stage}</Badge><Badge tone="bg-indigo-500/15 text-indigo-600 dark:text-indigo-300">{open.rep || "No rep"}</Badge></div></>}>
         {open && <div>
           <div className="grid grid-cols-3 gap-3 pb-2 text-center">
             {[["Assigned", fmtDate(open.dateAssigned)], ["Effort", open.effortHrs != null ? `${open.effortHrs} h` : "—"], ["Age", daysSince(open.dateAssigned) != null ? `${daysSince(open.dateAssigned)} d` : "—"]].map(([k, v]) => <div key={k} className="rounded-xl bg-slate-100 p-2 dark:bg-slate-800"><div className="text-[11px] muted">{k}</div><div className="font-semibold">{v}</div></div>)}
@@ -96,22 +105,22 @@ export function Deals({ deals }: { deals: Deal[] }) {
           <Field label="Next steps" value={open.nextSteps} /><Field label="Blockers / product gaps" value={open.blockers} /><Field label="POC owners" value={open.pocOwners} />
           <Field label="Language(s)" value={open.languages} /><Field label="Presales lead" value={open.lead} /><Field label="Deal value (INR)" value={open.value?.toLocaleString("en-IN")} />
         </div>}
-      </Drawer>
-    </div>
+    </Drawer>
   );
 }
 
 /* ---------------- Demos ---------------- */
 export function Demos({ demos }: { demos: Demo[] }) {
   const [open, setOpen] = useState<Demo | null>(null);
+  const { drill } = useDrill();
   const statuses = uniq(demos.map(d => d.status));
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">{statuses.map(s => <div key={s} className="card p-3"><Badge>{s}</Badge><div className="mt-2 text-2xl font-semibold">{demos.filter(d => d.status === s).length}</div></div>)}</div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">{statuses.map(s => <div key={s} onClick={() => drill("demoStatus", s)} title={`Show ${s} demos`} className="card cursor-pointer p-3 transition hover:border-sky-500/50 hover:shadow-md"><Badge>{s}</Badge><div className="mt-2 text-2xl font-semibold">{demos.filter(d => d.status === s).length}</div></div>)}</div>
       <DemoAgeing demos={demos} />
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Demo type mix"><Donut data={countBy(demos, d => d.type)} /></Card>
-        <Card title="Requested by"><HBar data={countBy(demos, d => d.requestedBy || "Unknown").slice(0, 8)} color="#10b981" height={220} /></Card>
+        <Card title="Demo type mix" subtitle="Click to see the demos"><Donut data={countBy(demos, d => d.type)} onPick={v => drill("demoType", v)} /></Card>
+        <Card title="Requested by" subtitle="Click to see the demos"><HBar data={countBy(demos, d => d.requestedBy || "Unknown").slice(0, 8)} color="#10b981" height={220} onPick={v => drill("requestedBy", v)} /></Card>
       </div>
       <div className="card overflow-x-auto">
         <table className="w-full text-sm"><thead className="border-b border-slate-200 text-xs uppercase tracking-wide muted dark:border-slate-800"><tr>{["Client", "Type", "Use case", "Requested by", "Requested", "Status", "Latest update"].map(h => <th key={h} className="px-3 py-2 text-left font-medium">{h}</th>)}</tr></thead>
@@ -134,6 +143,7 @@ export function Demos({ demos }: { demos: Demo[] }) {
 export function Meetings({ meetings, data }: { meetings: Meeting[]; data: Dataset }) {
   const [month, setMonth] = useState(() => today().slice(0, 7));
   const [open, setOpen] = useState<Meeting | null>(null);
+  const { drill } = useDrill();
   const byDate = useMemo(() => { const m = new Map<string, Meeting[]>(); meetings.forEach(x => x.date && m.set(x.date, [...(m.get(x.date) ?? []), x])); return m; }, [meetings]);
   const [y, mo] = month.split("-").map(Number);
   const first = new Date(Date.UTC(y, mo - 1, 1)); const lead = (first.getUTCDay() + 6) % 7; const days = new Date(Date.UTC(y, mo, 0)).getUTCDate();
@@ -151,7 +161,7 @@ export function Meetings({ meetings, data }: { meetings: Meeting[]; data: Datase
                 <div>{i + 1}</div>{n > 0 && <div className="text-[10px] font-semibold">{n}</div>}</div>); })}
           </div>
         </Card>
-        <Card title="Meeting status"><Donut data={countBy(meetings, m => m.status)} height={180} /></Card>
+        <Card title="Meeting status" subtitle="Click to see the meetings"><Donut data={countBy(meetings, m => m.status)} height={180} onPick={v => drill("meetingStatus", v)} /></Card>
         <Card title="Prep briefs" subtitle="Upcoming client meetings">{data.prep.length ? data.prep.map((p, i) => <div key={i} className="mb-3 rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-800/60"><div className="font-medium text-sm">{p.client} <span className="muted font-normal">· {fmtDate(p.date)} {p.time}</span></div><p className="mt-1 line-clamp-3 muted">{p.brief}</p></div>) : <Empty text="No prep briefs." />}</Card>
         <Card title="F2F reimbursement">{data.f2f.map((r, i) => <div key={i} className="flex items-center justify-between border-b border-slate-100 py-2 text-xs dark:border-slate-800"><div><div className="font-medium">{r.company}</div><div className="muted">{fmtDate(r.date)} · {r.km ?? "?"} km @ ₹{r.rate ?? "?"}</div></div><Badge>{r.status || "—"}</Badge></div>)}</Card>
       </div>

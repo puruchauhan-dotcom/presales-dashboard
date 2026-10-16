@@ -6,7 +6,9 @@ import { Donut, HBar } from "./charts";
 import { countBy, daysSince, fmtDate, today, type Dataset, type Deal, type Demo } from "../lib";
 
 export const HEALTH_COLORS: Record<string, string> = { Active: "#10b981", Cooling: "#f59e0b", Cold: "#ef4444", Closed: "#64748b", Unknown: "#94a3b8" };
-export const healthTone = (h: string) => ({ Active: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400", Cooling: "bg-amber-500/15 text-amber-600 dark:text-amber-400", Cold: "bg-rose-500/15 text-rose-600 dark:text-rose-400", Closed: "bg-slate-500/20 text-slate-500" } as Record<string, string>)[h] ?? "bg-slate-500/15 text-slate-500";
+export { healthTone } from "./health-tone";
+import { healthTone } from "./health-tone";
+import { useDrill } from "./drill";
 const tip = { contentStyle: { background: "#0f172a", border: "1px solid #334155", borderRadius: 10, color: "#e2e8f0", fontSize: 12 }, itemStyle: { color: "#e2e8f0" } };
 
 export const isPuruPaid = (d: Deal) => /puru chauhan/i.test(d.pocOwners) && /^paid$/i.test(d.pocType);
@@ -26,6 +28,7 @@ export function Health({ deals }: { deals: Deal[] }) {
   const closed = deals.filter(d => !/^open$/i.test(d.outcome));
   const themes = countBy(deals.filter(d => d.blockerTheme), d => d.blockerTheme);
   const verticals = countBy(deals, d => verticalGroup(d.vertical));
+  const { drill, openDeal } = useDrill();
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -33,27 +36,27 @@ export function Health({ deals }: { deals: Deal[] }) {
         <Kpi label="Paid POC conversion" value={`${conv}%`} hint={`${paid.length} paid vs ${free.length} free POCs`} icon={<span className="text-xs font-bold">₹</span>} accent="from-sky-500 to-indigo-500" />
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="Account health" subtitle="Based on days since last client touch">
+        <Card title="Account health" subtitle="Based on days since last client touch · click a bar">
           <div className="flex flex-wrap items-center justify-center gap-4">
-            <div style={{ width: "100%", height: 200 }}><ResponsiveContainer><BarChart data={health}><CartesianGrid vertical={false} stroke="#64748b22" /><XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} /><YAxis allowDecimals={false} stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} width={24} /><Tooltip {...tip} cursor={{ fill: "#64748b18" }} />
-              <Bar dataKey="value" name="Accounts" radius={[6, 6, 0, 0]}>{health.map(h => <Cell key={h.name} fill={HEALTH_COLORS[h.name]} />)}</Bar></BarChart></ResponsiveContainer></div>
+            <div style={{ width: "100%", height: 200 }}><ResponsiveContainer><BarChart data={health} onClick={(st: { activeLabel?: string | number }) => st?.activeLabel != null && drill("health", String(st.activeLabel))} style={{ cursor: "pointer" }}><CartesianGrid vertical={false} stroke="#64748b22" /><XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} /><YAxis allowDecimals={false} stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} width={24} /><Tooltip {...tip} cursor={{ fill: "#0ea5e922" }} />
+              <Bar dataKey="value" name="Accounts" radius={[6, 6, 0, 0]} className="cursor-pointer" activeBar={{ fillOpacity: 0.75, stroke: "#e2e8f0", strokeWidth: 1 }}>{health.map(h => <Cell key={h.name} fill={HEALTH_COLORS[h.name]} />)}</Bar></BarChart></ResponsiveContainer></div>
           </div>
         </Card>
         <Card title="Cold & cooling accounts" subtitle={`${cold.length} accounts need a touch`} className="lg:col-span-2">
           <div className="max-h-[300px] overflow-y-auto"><table className="w-full text-sm"><thead className="text-xs uppercase muted"><tr><th className="py-1 text-left">Account</th><th className="text-left">Health</th><th className="text-right">Days</th><th className="pl-3 text-left">Last touch</th><th className="pl-3 text-left">Owner</th></tr></thead>
-            <tbody>{cold.map(d => <tr key={d.id} className="border-t border-slate-100 dark:border-slate-800"><td className="py-1.5"><div className="font-medium">{d.account}</div><div className="text-[11px] muted">{d.stage}</div></td><td><span className={`chip ${healthTone(d.health)}`}>{d.health}</span></td>
+            <tbody>{cold.map(d => <tr key={d.id} onClick={() => openDeal(d)} className="cursor-pointer hover:bg-sky-500/5 border-t border-slate-100 dark:border-slate-800"><td className="py-1.5"><div className="font-medium">{d.account}</div><div className="text-[11px] muted">{d.stage}</div></td><td><span className={`chip ${healthTone(d.health)}`}>{d.health}</span></td>
               <td className="text-right font-semibold tabular-nums">{d.daysSinceTouch ?? "—"}</td><td className="pl-3 text-xs muted">{fmtDate(d.lastTouch)}{d.lastTouchVia && ` · ${d.lastTouchVia}`}</td><td className="pl-3 text-xs">{d.nextActionOwner || d.rep || "—"}</td></tr>)}</tbody></table>{!cold.length && <Empty text="No cold or cooling accounts." />}</div>
         </Card>
         <Card title="Paid vs free POCs" subtitle={`Conversion = paid ÷ (paid + free) = ${conv}%`}>
-          <Donut height={170} data={[{ name: "Paid", value: paid.length }, { name: "Free", value: free.length }, { name: "No POC", value: deals.length - paid.length - free.length }].filter(x => x.value)} />
+          <Donut height={170} data={[{ name: "Paid", value: paid.length }, { name: "Free", value: free.length }, { name: "No POC", value: deals.length - paid.length - free.length }].filter(x => x.value)} onPick={v => drill("pocType", v)} />
           <div className="mt-3 text-xs muted">Paid POCs with Puru Chauhan as owner: <b className="text-sky-500">{deals.filter(isPuruPaid).length}</b></div>
         </Card>
         <Card title="Win / loss outcomes" subtitle={`${closed.length} closed · ${deals.length - closed.length} open`}>
-          <Donut height={150} data={outcomes} />
+          <Donut height={150} data={outcomes} onPick={v => drill("outcome", v)} />
           <ul className="mt-3 space-y-2 text-xs">{closed.map(d => <li key={d.id} className="rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60"><div className="flex justify-between"><b>{d.account}</b><Badge>{d.outcome}</Badge></div><div className="mt-0.5 muted">{d.outcomeReason || "No reason recorded"}</div></li>)}</ul>
         </Card>
-        <Card title="Blocker themes" subtitle="Deals per product gap / blocker"><HBar data={themes} height={Math.max(200, themes.length * 28)} color="#f59e0b" /></Card>
-        <Card title="Vertical mix" subtitle="Similar verticals grouped" className="lg:col-span-3"><HBar data={verticals} height={Math.max(200, verticals.length * 28)} color="#8b5cf6" /></Card>
+        <Card title="Blocker themes" subtitle="Deals per product gap / blocker · click a bar"><HBar data={themes} height={Math.max(200, themes.length * 28)} color="#f59e0b" onPick={v => drill("blockerTheme", v)} /></Card>
+        <Card title="Vertical mix" subtitle="Similar verticals grouped · click a bar to see the accounts" className="lg:col-span-3"><HBar data={verticals} height={Math.max(200, verticals.length * 28)} color="#8b5cf6" onPick={v => drill("vertical", v)} /></Card>
       </div>
     </div>
   );

@@ -1,0 +1,18 @@
+import { chromium } from "playwright";
+const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 1512, height: 1000 }, deviceScaleFactor: 1.5 });
+const d = "screenshots/";
+await p.goto("http://localhost:8787/"); await p.waitForSelector("input[type=password]"); await p.screenshot({ path: d + "00-login.png" });
+await p.fill("input[type=password]", process.env.PW ?? "localdev"); await p.click("button"); await p.waitForTimeout(2500);
+const nav = async (label, file, full = true) => { await p.click(`aside button:has-text("${label}")`); await p.waitForTimeout(1300); await p.screenshot({ path: d + file, fullPage: full }); };
+await nav("Overview", "01-overview-dark.png");
+await nav("POC health", "09-poc-health-outcomes.png");
+await nav("This week", "10-this-week-next-actions.png");
+await nav("Deal pipeline", "02-deals-kanban.png");
+await p.click("button:has-text('Table')"); await p.waitForTimeout(500); await p.screenshot({ path: d + "03-deals-table.png", fullPage: true });
+await p.click("tbody tr >> nth=3"); await p.waitForTimeout(700); await p.screenshot({ path: d + "04-deal-drawer.png" }); await p.mouse.click(100, 500);
+await nav("Demo pipeline", "05-demos-ageing.png");
+await nav("Meetings", "06-meetings.png");
+await nav("Data quality", "07-data-quality.png");
+await p.click('aside button:has-text("POC health")'); await p.click('button[aria-label="Toggle theme"]'); await p.waitForTimeout(1200);
+await p.screenshot({ path: d + "08-poc-health-light.png", fullPage: true });
+await b.close();

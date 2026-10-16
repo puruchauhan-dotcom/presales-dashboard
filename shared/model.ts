@@ -109,7 +109,7 @@ export function normalise(tabs: RawTabs): Omit<Dataset, "source" | "fetchedAt"> 
 /** Group fine-grained verticals into broad buckets. */
 export function verticalGroup(v: string): string {
   const s = v.toLowerCase();
-  if (!s) return "Unspecified";
+  if (!s) return "Vertical not set";
   if (/financ|fintech|bank|insur|wealth|lend|nbfc/.test(s)) return "BFSI / Fintech";
   if (/retail|e-?commerce|consumer goods|wholesale|fmcg|d2c|jewel/.test(s)) return "Retail & Consumer";
   if (/food|qsr|restaurant|beverage/.test(s)) return "Food & QSR";
