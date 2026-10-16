@@ -31,7 +31,7 @@ async function fromSheets(sheetId: string, creds: Record<string, string>): Promi
 
 async function fromSnapshot(): Promise<RawTabs | null> {
   try {
-    const file = path.join(process.cwd(), "data", "snapshot.json");
+    const file = path.resolve(process.env.SNAPSHOT_PATH || path.join(process.cwd(), "data", "snapshot.json"));
     return JSON.parse(await readFile(file, "utf8")).tabs as RawTabs;
   } catch { return null; }
 }

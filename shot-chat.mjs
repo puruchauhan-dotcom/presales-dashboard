@@ -1,0 +1,13 @@
+import { chromium } from "playwright";
+const base = process.env.URL ?? "http://localhost:8788/";
+const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 1512, height: 1000 }, deviceScaleFactor: 1.5 });
+await p.goto(base); await p.fill("input[type=password]", "localdev"); await p.click("button"); await p.waitForTimeout(2000);
+await p.click('button[aria-label="Open AI chat"]'); await p.waitForTimeout(500);
+await p.screenshot({ path: "screenshots/11-chat-suggestions.png" });
+await p.click('button:has-text("Which POCs are cold?")');
+await p.waitForFunction(() => !document.body.innerText.includes("Thinking…"), null, { timeout: 90000 }); await p.waitForTimeout(500);
+await p.screenshot({ path: "screenshots/12-chat-answer.png" });
+await p.click('button[aria-label="Open AI chat"]');
+await p.click('aside button:has-text("Ask CREATOR")'); await p.waitForTimeout(1200);
+await p.screenshot({ path: "screenshots/13-ask-creator-inbox.png", fullPage: true });
+await b.close();

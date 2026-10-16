@@ -35,3 +35,14 @@ npm run build && DASHBOARD_PASSWORD=choose-one npm start   # http://localhost:87
 5. Generate a domain under Settings → Networking.
 
 Never commit `.env` or key files (already in `.gitignore`).
+
+## AI chat + "Ask CREATOR" escalation
+- Floating chat (bottom-right on every page) → `POST /api/chat` (session-protected, 30 req/min per IP). Gemini REST, grounded only in the
+  current dataset (compact JSON, long text trimmed, **email addresses removed** before sending). Optional "use active filters".
+- If the model says the data is insufficient, or the user clicks **Ask CREATOR to check Gmail/Calendar**, the question is queued
+  (`POST /api/escalate`, `GET /api/inbox` for the UI tab "Ask CREATOR").
+- CREATOR bot API (header `Authorization: Bearer $CREATOR_API_TOKEN`, independent of the user session):
+  - `GET /api/questions?status=open`
+  - `POST /api/questions/:id/answer` with JSON `{ "answer": "...", "answeredBy": "CREATOR" }`
+- Queue persists to `$DATA_DIR/questions.json`. **Without a Railway volume it is wiped on every redeploy.**
+- Note: the chat sends tracker data (client names, deal notes) to Google's Gemini API. Confirm this is approved before enabling `GEMINI_API_KEY` in production.

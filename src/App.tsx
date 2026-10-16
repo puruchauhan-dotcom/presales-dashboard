@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { HeartPulse, ListTodo, BarChart3, Briefcase, CalendarDays, Database, Lock, LogOut, Moon, MonitorPlay, RefreshCw, ShieldCheck, Sun, Target, Timer, Users, X } from "lucide-react";
+import { Bot, HeartPulse, ListTodo, BarChart3, Briefcase, CalendarDays, Database, Lock, LogOut, Moon, MonitorPlay, RefreshCw, ShieldCheck, Sun, Target, Timer, Users, X } from "lucide-react";
 import { Kpi } from "./components/ui";
 import { Deals, Demos, Meetings, Overview, Quality } from "./components/views";
+import { ChatWidget, CreatorInbox } from "./components/chat";
 import { Actions, Health, demoDelivery, isPuruPaid } from "./components/insights";
 import { applyFilters, defaultFilters, stageSort, today, uniq, type Dataset, type Filters } from "./lib";
 
 const NAV = [
   { id: "overview", label: "Overview", icon: BarChart3 }, { id: "health", label: "POC health & outcomes", icon: HeartPulse }, { id: "actions", label: "This week & actions", icon: ListTodo },
   { id: "deals", label: "Deal pipeline", icon: Briefcase },
-  { id: "demos", label: "Demo pipeline", icon: MonitorPlay }, { id: "meetings", label: "Meetings", icon: CalendarDays }, { id: "quality", label: "Data quality", icon: ShieldCheck },
+  { id: "demos", label: "Demo pipeline", icon: MonitorPlay }, { id: "meetings", label: "Meetings", icon: CalendarDays }, { id: "quality", label: "Data quality", icon: ShieldCheck }, { id: "inbox", label: "Ask CREATOR", icon: Bot },
 ] as const;
 type View = typeof NAV[number]["id"];
 
@@ -114,9 +115,11 @@ export default function App() {
             {view === "demos" && <Demos demos={f.demos} />}
             {view === "meetings" && <Meetings meetings={f.meetings} data={data} />}
             {view === "quality" && <Quality deals={f.deals} demos={f.demos} />}
+            {view === "inbox" && <CreatorInbox />}
           </>}
         </div>
       </main>
+      <ChatWidget filters={filters} hasFilters={active.length > 0} />
     </div>
   );
 }
