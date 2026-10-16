@@ -1,0 +1,10 @@
+node_modules
+dist
+dist-server
+.env
+.env.*
+!.env.example
+*.pem
+service-account*.json
+screenshots/*.tmp
+data/snapshot.json
