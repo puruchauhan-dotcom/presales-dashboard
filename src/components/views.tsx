@@ -143,12 +143,13 @@ export function Demos({ demos }: { demos: Demo[] }) {
 export function Meetings({ meetings, data }: { meetings: Meeting[]; data: Dataset }) {
   const [month, setMonth] = useState(() => today().slice(0, 7));
   const [open, setOpen] = useState<Meeting | null>(null);
+  const [day, setDay] = useState<string | null>(null);
   const { drill } = useDrill();
   const byDate = useMemo(() => { const m = new Map<string, Meeting[]>(); meetings.forEach(x => x.date && m.set(x.date, [...(m.get(x.date) ?? []), x])); return m; }, [meetings]);
   const [y, mo] = month.split("-").map(Number);
   const first = new Date(Date.UTC(y, mo - 1, 1)); const lead = (first.getUTCDay() + 6) % 7; const days = new Date(Date.UTC(y, mo, 0)).getUTCDate();
   const shift = (n: number) => { const d = new Date(Date.UTC(y, mo - 1 + n, 1)); setMonth(d.toISOString().slice(0, 7)); };
-  const sorted = [...meetings].sort((a, b) => ((b.date ?? "") + b.time).localeCompare((a.date ?? "") + a.time));
+  const sorted = [...meetings].filter(m => !day || m.date === day).sort((a, b) => day ? a.time.localeCompare(b.time) : ((b.date ?? "") + b.time).localeCompare((a.date ?? "") + a.time));
   return (
     <div className="grid gap-4 xl:grid-cols-5">
       <div className="space-y-4 xl:col-span-2">
@@ -157,15 +158,15 @@ export function Meetings({ meetings, data }: { meetings: Meeting[]; data: Datase
           <div className="mt-1 grid grid-cols-7 gap-1">
             {Array.from({ length: lead }).map((_, i) => <div key={"x" + i} />)}
             {Array.from({ length: days }).map((_, i) => { const iso = `${month}-${String(i + 1).padStart(2, "0")}`; const n = byDate.get(iso)?.length ?? 0; return (
-              <div key={iso} title={`${n} meetings`} className={`aspect-square rounded-lg p-1 text-left text-xs ${iso === today() ? "ring-2 ring-sky-500" : ""} ${n ? (n > 2 ? "bg-emerald-500 text-white" : n > 1 ? "bg-emerald-500/60 text-white" : "bg-emerald-500/25") : "bg-slate-100 dark:bg-slate-800/50"}`}>
-                <div>{i + 1}</div>{n > 0 && <div className="text-[10px] font-semibold">{n}</div>}</div>); })}
+              <button type="button" key={iso} onClick={() => setDay(day === iso ? null : iso)} title={n ? `${n} meeting${n > 1 ? "s" : ""}: click to see them` : "No meetings"} className={`aspect-square cursor-pointer rounded-lg p-1 text-left text-xs transition hover:ring-2 hover:ring-sky-400/60 ${day === iso ? "ring-2 ring-amber-400" : iso === today() ? "ring-2 ring-sky-500" : ""} ${n ? (n > 2 ? "bg-emerald-500 text-white" : n > 1 ? "bg-emerald-500/60 text-white" : "bg-emerald-500/25") : "bg-slate-100 dark:bg-slate-800/50"}`}>
+                <div>{i + 1}</div>{n > 0 && <div className="text-[10px] font-semibold">{n}</div>}</button>); })}
           </div>
         </Card>
         <Card title="Meeting status" subtitle="Click to see the meetings"><Donut data={countBy(meetings, m => m.status)} height={180} onPick={v => drill("meetingStatus", v)} /></Card>
         <Card title="Prep briefs" subtitle="Upcoming client meetings">{data.prep.length ? data.prep.map((p, i) => <div key={i} className="mb-3 rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-800/60"><div className="font-medium text-sm">{p.client} <span className="muted font-normal">· {fmtDate(p.date)} {p.time}</span></div><p className="mt-1 line-clamp-3 muted">{p.brief}</p></div>) : <Empty text="No prep briefs." />}</Card>
         <Card title="F2F reimbursement">{data.f2f.map((r, i) => <div key={i} className="flex items-center justify-between border-b border-slate-100 py-2 text-xs dark:border-slate-800"><div><div className="font-medium">{r.company}</div><div className="muted">{fmtDate(r.date)} · {r.km ?? "?"} km @ ₹{r.rate ?? "?"}</div></div><Badge>{r.status || "—"}</Badge></div>)}</Card>
       </div>
-      <Card title="Timeline" subtitle={`${meetings.length} meetings`} className="xl:col-span-3">
+      <Card title={day ? `Meetings on ${fmtDate(day)}` : "Timeline"} subtitle={day ? `${sorted.length} meeting${sorted.length === 1 ? "" : "s"} · click one for notes, decisions and action items` : `${meetings.length} meetings · click a calendar day to see that day`} right={day ? <button onClick={() => setDay(null)} className="rounded-md px-2 py-1 text-xs text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800">Show all</button> : undefined} className="xl:col-span-3">
         <ol className="relative max-h-[120vh] overflow-y-auto border-l border-slate-200 pl-5 dark:border-slate-800">
           {sorted.map((m, i) => (
             <li key={i} className="mb-4 cursor-pointer" onClick={() => setOpen(m)}>
@@ -174,7 +175,7 @@ export function Meetings({ meetings, data }: { meetings: Meeting[]; data: Datase
               <div className="mt-0.5 font-medium hover:text-sky-500">{m.title}</div>
               {m.summary && <p className="mt-0.5 line-clamp-2 text-xs muted">{m.summary}</p>}
             </li>))}
-          {!sorted.length && <Empty />}
+          {!sorted.length && <Empty text={day ? "No meetings on this day." : undefined} />}
         </ol>
       </Card>
       <Drawer open={!!open} onClose={() => setOpen(null)} title={open && <><div className="text-xs muted">{fmtDate(open.date)} · {open.time} IST</div><h2 className="text-lg font-semibold">{open.title}</h2><div className="mt-2"><Badge>{open.status}</Badge></div></>}>
